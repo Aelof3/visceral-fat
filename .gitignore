@@ -16,11 +16,11 @@ assets/analysis/
 *.zip
 mri_images.zip
 
-# Raw MRI data folders
+# Raw MRI data folders (DICOM structure)
 2025-*/
 *Abdomin*/
-PA*/
-ST*/
+PA[0-9]*/
+ST[0-9]*/
 
 # -------------------------------------------
 # Python
