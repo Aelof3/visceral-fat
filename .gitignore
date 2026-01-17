@@ -41,12 +41,12 @@ backend/build/
 .eggs/
 *.egg
 
-# PyInstaller
+# PyInstaller (keep vfat-backend.spec, ignore build artifacts)
 backend/*.spec.bak
 backend/dist/
 backend/build/
 backend/*.manifest
-backend/*.spec
+!backend/vfat-backend.spec
 
 # -------------------------------------------
 # Node.js / Frontend
