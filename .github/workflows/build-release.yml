@@ -1,0 +1,173 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            arch: universal
+          - os: windows-latest
+            platform: win
+            arch: x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            frontend/package-lock.json
+            electron_app/package-lock.json
+
+      # Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      # Install Python dependencies
+      - name: Install Python dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      # Install Frontend dependencies
+      - name: Install Frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      # Build Frontend
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm run build
+
+      # Copy Frontend to Electron
+      - name: Copy Frontend to Electron
+        run: |
+          mkdir -p electron_app/frontend-dist
+          cp -r frontend/dist/* electron_app/frontend-dist/
+        shell: bash
+
+      # Build Backend with PyInstaller
+      - name: Build Backend (macOS/Linux)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd backend
+          pyinstaller --clean vfat-backend.spec
+
+      - name: Build Backend (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd backend
+          pyinstaller --clean vfat-backend.spec
+
+      # Install Electron dependencies
+      - name: Install Electron dependencies
+        run: |
+          cd electron_app
+          npm ci
+
+      # Build Electron App
+      - name: Build Electron App (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cd electron_app
+          npm run package:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Electron App (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd electron_app
+          npm run package:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Electron App (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cd electron_app
+          npm run package:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Upload artifacts
+      - name: Upload macOS artifacts
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-builds
+          path: |
+            electron_app/release/*.dmg
+          retention-days: 5
+
+      - name: Upload Windows artifacts
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-builds
+          path: |
+            electron_app/release/*.exe
+          retention-days: 5
+
+      - name: Upload Linux artifacts
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-builds
+          path: |
+            electron_app/release/*.AppImage
+          retention-days: 5
+
+  # Create GitHub Release
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f -name "*"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/macos-builds/*
+            artifacts/windows-builds/*
+            artifacts/linux-builds/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
