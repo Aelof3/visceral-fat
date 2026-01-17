@@ -2,6 +2,12 @@
 
 A comprehensive tool for analyzing MRI images to detect and visualize visceral fat, with color-coded tissue segmentation and 3D model generation.
 
+## Demo
+
+https://github.com/Aelof3/visceral-fat/raw/main/vfat.mp4
+
+*Demo showing tissue segmentation, analysis statistics, and interactive 3D model visualization.*
+
 ## Project Structure
 
 ```
