@@ -1,6 +1,6 @@
 {
   "name": "vfat-analyzer",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Visceral Fat MRI Analyzer - Desktop Application",
   "main": "main.js",
   "author": "VFAT Team",
