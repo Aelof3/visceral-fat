@@ -9,6 +9,41 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const http = require('http');
 
+// File-based logging for debugging (especially on Windows where console isn't visible)
+let logFile = null;
+function initLogging() {
+  try {
+    const logDir = app.getPath('logs');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    const logPath = path.join(logDir, 'vfat-backend.log');
+    logFile = fs.createWriteStream(logPath, { flags: 'a' });
+    log(`=== VFAT Analyzer started at ${new Date().toISOString()} ===`);
+    log(`Log file: ${logPath}`);
+  } catch (e) {
+    console.error('Failed to initialize logging:', e);
+  }
+}
+
+function log(message) {
+  const timestamp = new Date().toISOString();
+  const line = `[${timestamp}] ${message}`;
+  console.log(line);
+  if (logFile) {
+    logFile.write(line + '\n');
+  }
+}
+
+function logError(message) {
+  const timestamp = new Date().toISOString();
+  const line = `[${timestamp}] ERROR: ${message}`;
+  console.error(line);
+  if (logFile) {
+    logFile.write(line + '\n');
+  }
+}
+
 // Configuration
 const CONFIG = {
   backendPort: 8000,
@@ -50,6 +85,28 @@ function getBackendPath() {
     const resourcesPath = process.resourcesPath;
     const backendDir = path.join(resourcesPath, 'backend');
     
+    log(`Resources path: ${resourcesPath}`);
+    log(`Backend directory: ${backendDir}`);
+    
+    // List contents of backend directory for debugging
+    if (fs.existsSync(backendDir)) {
+      try {
+        const files = fs.readdirSync(backendDir);
+        log(`Backend directory contents: ${files.join(', ')}`);
+      } catch (e) {
+        logError(`Failed to list backend directory: ${e.message}`);
+      }
+    } else {
+      logError(`Backend directory does not exist: ${backendDir}`);
+      // List resources directory
+      try {
+        const files = fs.readdirSync(resourcesPath);
+        log(`Resources directory contents: ${files.join(', ')}`);
+      } catch (e) {
+        logError(`Failed to list resources directory: ${e.message}`);
+      }
+    }
+    
     // Try to find the executable (could be with or without .exe extension)
     const possibleNames = process.platform === 'win32' 
       ? ['vfat-backend.exe', 'vfat-backend']
@@ -58,10 +115,10 @@ function getBackendPath() {
     let executablePath = null;
     for (const name of possibleNames) {
       const testPath = path.join(backendDir, name);
-      console.log(`Checking for backend at: ${testPath}`);
+      log(`Checking for backend at: ${testPath}`);
       if (fs.existsSync(testPath)) {
         executablePath = testPath;
-        console.log(`Found backend executable: ${executablePath}`);
+        log(`Found backend executable: ${executablePath}`);
         break;
       }
     }
@@ -71,7 +128,7 @@ function getBackendPath() {
       executablePath = process.platform === 'win32'
         ? path.join(backendDir, 'vfat-backend.exe')
         : path.join(backendDir, 'vfat-backend');
-      console.log(`Using default backend path: ${executablePath}`);
+      logError(`Backend not found, using default path: ${executablePath}`);
     }
     
     return {
@@ -94,16 +151,16 @@ function checkBackendHealth() {
       method: 'GET',
       timeout: CONFIG.healthCheckTimeout
     }, (res) => {
-      console.log(`Health check response: ${res.statusCode}`);
+      log(`Health check response: ${res.statusCode}`);
       resolve(res.statusCode === 200);
     });
     
     req.on('error', (err) => {
-      console.log(`Health check error: ${err.message}`);
+      log(`Health check error: ${err.message}`);
       resolve(false);
     });
     req.on('timeout', () => {
-      console.log('Health check timeout');
+      log('Health check timeout');
       req.destroy();
       resolve(false);
     });
@@ -117,16 +174,18 @@ function checkBackendHealth() {
  */
 async function waitForBackend() {
   const startTime = Date.now();
+  let attempts = 0;
   
   while (Date.now() - startTime < CONFIG.startupTimeout) {
+    attempts++;
     if (await checkBackendHealth()) {
-      console.log('Backend is ready!');
+      log(`Backend is ready after ${attempts} attempts!`);
       return true;
     }
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   
-  console.error('Backend failed to start within timeout');
+  logError(`Backend failed to start within ${CONFIG.startupTimeout}ms (${attempts} attempts)`);
   return false;
 }
 
@@ -135,32 +194,33 @@ async function waitForBackend() {
  */
 function startBackend() {
   if (backendProcess) {
-    console.log('Backend already running');
+    log('Backend already running');
     return;
   }
   
   const backendConfig = getBackendPath();
-  console.log(`Starting backend: ${backendConfig.command} ${backendConfig.args.join(' ')}`);
-  console.log(`Working directory: ${backendConfig.cwd}`);
+  log(`Starting backend: ${backendConfig.command}`);
+  log(`Arguments: ${backendConfig.args.join(' ') || '(none)'}`);
+  log(`Working directory: ${backendConfig.cwd}`);
   
   // Check if the backend executable exists
   if (!fs.existsSync(backendConfig.command)) {
-    console.error(`Backend executable not found: ${backendConfig.command}`);
+    logError(`Backend executable not found: ${backendConfig.command}`);
     
     // List the directory contents to help debug
     const backendDir = path.dirname(backendConfig.command);
-    console.log(`Checking directory: ${backendDir}`);
+    log(`Checking directory: ${backendDir}`);
     if (fs.existsSync(backendDir)) {
       const files = fs.readdirSync(backendDir);
-      console.log(`Files in backend directory: ${files.join(', ')}`);
+      log(`Files in backend directory: ${files.join(', ')}`);
     } else {
-      console.error(`Backend directory does not exist: ${backendDir}`);
+      logError(`Backend directory does not exist: ${backendDir}`);
       // Check parent directories
       const resourcesPath = process.resourcesPath;
-      console.log(`Resources path: ${resourcesPath}`);
+      log(`Resources path: ${resourcesPath}`);
       if (fs.existsSync(resourcesPath)) {
         const resourceFiles = fs.readdirSync(resourcesPath);
-        console.log(`Files in resources: ${resourceFiles.join(', ')}`);
+        log(`Files in resources: ${resourceFiles.join(', ')}`);
       }
     }
     
@@ -168,9 +228,10 @@ function startBackend() {
     return;
   }
   
-  console.log('Backend executable found, starting process...');
+  log('Backend executable found, starting process...');
   
   try {
+    log(`Spawning process with PID tracking...`);
     backendProcess = spawn(backendConfig.command, backendConfig.args, {
       cwd: backendConfig.cwd,
       env: {
@@ -179,34 +240,40 @@ function startBackend() {
         PORT: String(CONFIG.backendPort)
       },
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: false  // Don't use shell to handle paths with spaces correctly
+      shell: false,  // Don't use shell to handle paths with spaces correctly
+      windowsHide: false  // Show console window on Windows for debugging
     });
     
+    log(`Backend process spawned with PID: ${backendProcess.pid}`);
+    
     backendProcess.stdout.on('data', (data) => {
-      console.log(`[Backend] ${data.toString().trim()}`);
+      log(`[Backend stdout] ${data.toString().trim()}`);
     });
     
     backendProcess.stderr.on('data', (data) => {
-      console.error(`[Backend Error] ${data.toString().trim()}`);
+      log(`[Backend stderr] ${data.toString().trim()}`);
     });
     
     backendProcess.on('error', (error) => {
-      console.error(`Failed to start backend: ${error.message}`);
+      logError(`Failed to start backend process: ${error.message}`);
+      logError(`Error code: ${error.code || 'N/A'}`);
       backendProcess = null;
       handleBackendCrash();
     });
     
     backendProcess.on('exit', (code, signal) => {
-      console.log(`Backend exited with code ${code}, signal ${signal}`);
+      log(`Backend exited with code ${code}, signal ${signal}`);
       backendProcess = null;
       
       if (!isQuitting && code !== 0) {
+        logError(`Backend crashed with exit code ${code}`);
         handleBackendCrash();
       }
     });
     
   } catch (error) {
-    console.error(`Error starting backend: ${error.message}`);
+    logError(`Exception starting backend: ${error.message}`);
+    logError(`Stack: ${error.stack}`);
     backendProcess = null;
   }
 }
@@ -220,21 +287,25 @@ function handleBackendCrash() {
   restartCount++;
   
   if (restartCount <= CONFIG.maxRestarts) {
-    console.log(`Attempting backend restart (${restartCount}/${CONFIG.maxRestarts})...`);
+    log(`Attempting backend restart (${restartCount}/${CONFIG.maxRestarts})...`);
     setTimeout(startBackend, CONFIG.restartDelay);
   } else {
-    console.error('Maximum restart attempts reached');
+    logError('Maximum restart attempts reached');
     
     // Get log path for the user
     const logPath = app.getPath('logs');
+    const logFile = path.join(logPath, 'vfat-backend.log');
+    
+    logError(`Backend could not be started. Log file: ${logFile}`);
     
     dialog.showErrorBox(
       'Backend Error',
-      `The analysis backend has crashed and could not be restarted.\n\n` +
+      `The analysis backend could not be started.\n\n` +
       `Platform: ${process.platform}\n` +
+      `Version: ${app.getVersion()}\n` +
       `Resources path: ${process.resourcesPath || 'N/A'}\n\n` +
-      `Please check the logs at:\n${logPath}\n\n` +
-      `Or try reinstalling the application.`
+      `Please check the log file at:\n${logFile}\n\n` +
+      `You can open this file to see detailed error information.`
     );
   }
 }
@@ -249,7 +320,7 @@ function stopBackend() {
   }
   
   if (backendProcess) {
-    console.log('Stopping backend...');
+    log('Stopping backend...');
     
     // Try graceful shutdown first
     if (process.platform === 'win32') {
@@ -279,7 +350,7 @@ function startHealthChecks() {
     const isHealthy = await checkBackendHealth();
     
     if (!isHealthy && backendProcess) {
-      console.warn('Backend health check failed, restarting...');
+      log('Backend health check failed, restarting...');
       stopBackend();
       startBackend();
     }
@@ -338,29 +409,44 @@ function createWindow() {
  * App initialization
  */
 async function initialize() {
-  console.log('Initializing VFAT Analyzer...');
-  console.log(`Platform: ${process.platform}`);
-  console.log(`App packaged: ${app.isPackaged}`);
+  // Initialize file logging first
+  initLogging();
+  
+  log('Initializing VFAT Analyzer...');
+  log(`Platform: ${process.platform}`);
+  log(`Architecture: ${process.arch}`);
+  log(`Electron version: ${process.versions.electron}`);
+  log(`Node version: ${process.versions.node}`);
+  log(`App version: ${app.getVersion()}`);
+  log(`App packaged: ${app.isPackaged}`);
+  log(`App path: ${app.getAppPath()}`);
+  log(`Resources path: ${process.resourcesPath || 'N/A'}`);
+  log(`User data path: ${app.getPath('userData')}`);
   
   // Check if backend is already running (e.g., started by dev script)
-  console.log('Checking if backend is already running...');
+  log('Checking if backend is already running...');
   const alreadyRunning = await checkBackendHealth();
-  console.log(`Backend already running: ${alreadyRunning}`);
+  log(`Backend already running: ${alreadyRunning}`);
   
   if (alreadyRunning) {
-    console.log('Backend detected, skipping startup...');
+    log('Backend detected, skipping startup...');
   } else {
     // Start backend
-    console.log('No backend detected, starting...');
+    log('No backend detected, starting...');
     startBackend();
     
     // Wait for backend to be ready
+    log('Waiting for backend to become ready...');
     const backendReady = await waitForBackend();
     
     if (!backendReady) {
+      const logPath = path.join(app.getPath('logs'), 'vfat-backend.log');
+      logError('Backend failed to start - showing error dialog');
       dialog.showErrorBox(
         'Startup Error',
-        'Failed to start the analysis backend. Please check the logs and try again.'
+        `Failed to start the analysis backend.\n\n` +
+        `Please check the log file at:\n${logPath}\n\n` +
+        `This file contains detailed debugging information.`
       );
       app.quit();
       return;
@@ -405,9 +491,10 @@ app.on('will-quit', () => {
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught exception:', error);
+  logError(`Uncaught exception: ${error.message}`);
+  logError(`Stack: ${error.stack}`);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled rejection at:', promise, 'reason:', reason);
+  logError(`Unhandled rejection: ${reason}`);
 });
