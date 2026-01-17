@@ -1,0 +1,28 @@
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9
+
+# DICOM Processing
+pydicom>=2.4.0
+nibabel>=5.2.0
+
+# Image Processing & Analysis
+numpy>=1.26.0
+scipy>=1.14.0
+scikit-image>=0.22.0
+opencv-python-headless>=4.9.0
+pillow>=10.2.0
+
+# Machine Learning (for tissue segmentation)
+scikit-learn>=1.4.0
+
+# 3D Model Generation
+trimesh>=4.1.0
+numpy-stl>=3.1.0
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+aiofiles>=23.2.0

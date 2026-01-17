@@ -1,0 +1,83 @@
+{
+  "name": "vfat-analyzer",
+  "version": "1.0.0",
+  "description": "Visceral Fat MRI Analyzer - Desktop Application",
+  "main": "main.js",
+  "author": "VFAT Team",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "start:dev": "cross-env NODE_ENV=development electron .",
+    "build:frontend": "cd ../frontend && npm run build && cp -r dist ../electron_app/frontend-dist",
+    "build:backend": "cd ../backend && pyinstaller --clean vfat-backend.spec",
+    "build:all": "npm run build:frontend && npm run build:backend",
+    "package:mac": "electron-builder --mac",
+    "package:win": "electron-builder --win",
+    "package:linux": "electron-builder --linux",
+    "package": "electron-builder"
+  },
+  "dependencies": {
+    "electron-is-dev": "^3.0.1"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.vfat.analyzer",
+    "productName": "VFAT Analyzer",
+    "directories": {
+      "output": "release",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "frontend-dist/**/*",
+      "!node_modules"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/dist/vfat-backend",
+        "to": "backend"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.medical",
+      "icon": "build-resources/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "icon": "build-resources/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "build-resources/icon.png",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Science"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

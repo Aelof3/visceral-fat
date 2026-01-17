@@ -1,0 +1,109 @@
+# ===========================================
+# VFAT Analyzer - Git Ignore
+# ===========================================
+
+# -------------------------------------------
+# USER DATA - NEVER COMMIT THESE
+# -------------------------------------------
+
+# Uploaded DICOM/MRI images
+assets/dicom/
+assets/images/
+assets/models/
+assets/analysis/
+
+# Any uploaded zip files
+*.zip
+mri_images.zip
+
+# Raw MRI data folders
+2025-*/
+*Abdomin*/
+PA*/
+ST*/
+
+# -------------------------------------------
+# Python
+# -------------------------------------------
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/*.egg-info/
+backend/dist/
+backend/build/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.eggs/
+*.egg
+
+# PyInstaller
+backend/*.spec.bak
+backend/dist/
+backend/build/
+backend/*.manifest
+backend/*.spec
+
+# -------------------------------------------
+# Node.js / Frontend
+# -------------------------------------------
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn
+
+# -------------------------------------------
+# Electron
+# -------------------------------------------
+electron_app/node_modules/
+electron_app/frontend-dist/
+electron_app/release/
+electron_app/dist/
+electron_app/.icon-icns/
+
+# -------------------------------------------
+# IDE / Editor
+# -------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# -------------------------------------------
+# Environment & Secrets
+# -------------------------------------------
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# -------------------------------------------
+# Logs & Temp Files
+# -------------------------------------------
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# -------------------------------------------
+# Build Artifacts
+# -------------------------------------------
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.blockmap
