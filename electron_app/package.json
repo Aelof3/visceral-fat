@@ -5,6 +5,10 @@
   "main": "main.js",
   "author": "VFAT Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Aelof3/visceral-fat.git"
+  },
   "scripts": {
     "start": "electron .",
     "start:dev": "cross-env NODE_ENV=development electron .",
