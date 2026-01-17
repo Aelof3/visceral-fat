@@ -43,8 +43,9 @@
     ],
     "extraResources": [
       {
-        "from": "../backend/dist/vfat-backend",
-        "to": "backend"
+        "from": "../backend/dist/",
+        "to": "backend",
+        "filter": ["vfat-backend*", "!*.toc", "!*.pyz", "!*.pkg"]
       }
     ],
     "mac": {

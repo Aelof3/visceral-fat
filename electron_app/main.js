@@ -5,6 +5,7 @@
 
 const { app, BrowserWindow, dialog, shell } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const http = require('http');
 
@@ -49,25 +50,35 @@ function getBackendPath() {
     const resourcesPath = process.resourcesPath;
     const backendDir = path.join(resourcesPath, 'backend');
     
-    if (process.platform === 'win32') {
-      return {
-        command: path.join(backendDir, 'vfat-backend.exe'),
-        args: [],
-        cwd: backendDir
-      };
-    } else if (process.platform === 'darwin') {
-      return {
-        command: path.join(backendDir, 'vfat-backend'),
-        args: [],
-        cwd: backendDir
-      };
-    } else {
-      return {
-        command: path.join(backendDir, 'vfat-backend'),
-        args: [],
-        cwd: backendDir
-      };
+    // Try to find the executable (could be with or without .exe extension)
+    const possibleNames = process.platform === 'win32' 
+      ? ['vfat-backend.exe', 'vfat-backend']
+      : ['vfat-backend', 'vfat-backend.exe'];
+    
+    let executablePath = null;
+    for (const name of possibleNames) {
+      const testPath = path.join(backendDir, name);
+      console.log(`Checking for backend at: ${testPath}`);
+      if (fs.existsSync(testPath)) {
+        executablePath = testPath;
+        console.log(`Found backend executable: ${executablePath}`);
+        break;
+      }
     }
+    
+    // Fall back to expected platform default if not found
+    if (!executablePath) {
+      executablePath = process.platform === 'win32'
+        ? path.join(backendDir, 'vfat-backend.exe')
+        : path.join(backendDir, 'vfat-backend');
+      console.log(`Using default backend path: ${executablePath}`);
+    }
+    
+    return {
+      command: executablePath,
+      args: [],
+      cwd: backendDir
+    };
   }
 }
 
@@ -132,6 +143,33 @@ function startBackend() {
   console.log(`Starting backend: ${backendConfig.command} ${backendConfig.args.join(' ')}`);
   console.log(`Working directory: ${backendConfig.cwd}`);
   
+  // Check if the backend executable exists
+  if (!fs.existsSync(backendConfig.command)) {
+    console.error(`Backend executable not found: ${backendConfig.command}`);
+    
+    // List the directory contents to help debug
+    const backendDir = path.dirname(backendConfig.command);
+    console.log(`Checking directory: ${backendDir}`);
+    if (fs.existsSync(backendDir)) {
+      const files = fs.readdirSync(backendDir);
+      console.log(`Files in backend directory: ${files.join(', ')}`);
+    } else {
+      console.error(`Backend directory does not exist: ${backendDir}`);
+      // Check parent directories
+      const resourcesPath = process.resourcesPath;
+      console.log(`Resources path: ${resourcesPath}`);
+      if (fs.existsSync(resourcesPath)) {
+        const resourceFiles = fs.readdirSync(resourcesPath);
+        console.log(`Files in resources: ${resourceFiles.join(', ')}`);
+      }
+    }
+    
+    handleBackendCrash();
+    return;
+  }
+  
+  console.log('Backend executable found, starting process...');
+  
   try {
     backendProcess = spawn(backendConfig.command, backendConfig.args, {
       cwd: backendConfig.cwd,
@@ -186,9 +224,17 @@ function handleBackendCrash() {
     setTimeout(startBackend, CONFIG.restartDelay);
   } else {
     console.error('Maximum restart attempts reached');
+    
+    // Get log path for the user
+    const logPath = app.getPath('logs');
+    
     dialog.showErrorBox(
       'Backend Error',
-      'The analysis backend has crashed and could not be restarted. Please restart the application.'
+      `The analysis backend has crashed and could not be restarted.\n\n` +
+      `Platform: ${process.platform}\n` +
+      `Resources path: ${process.resourcesPath || 'N/A'}\n\n` +
+      `Please check the logs at:\n${logPath}\n\n` +
+      `Or try reinstalling the application.`
     );
   }
 }

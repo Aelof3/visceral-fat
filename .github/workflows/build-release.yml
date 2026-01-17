@@ -82,12 +82,30 @@ jobs:
         run: |
           cd backend
           pyinstaller --clean vfat-backend.spec
+          echo "Backend build complete. Contents of dist:"
+          ls -la dist/
 
       - name: Build Backend (Windows)
         if: matrix.os == 'windows-latest'
+        shell: bash
         run: |
           cd backend
           pyinstaller --clean vfat-backend.spec
+          echo "Backend build complete. Contents of dist:"
+          ls -la dist/
+
+      # Verify backend executable was created
+      - name: Verify backend build
+        shell: bash
+        run: |
+          echo "Checking backend build output..."
+          if [ -f "backend/dist/vfat-backend" ]; then
+            echo "✓ Found: backend/dist/vfat-backend"
+          fi
+          if [ -f "backend/dist/vfat-backend.exe" ]; then
+            echo "✓ Found: backend/dist/vfat-backend.exe"
+          fi
+          ls -la backend/dist/ || echo "Backend dist directory is empty or missing!"
 
       # Install Electron dependencies
       - name: Install Electron dependencies
