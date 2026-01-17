@@ -24,6 +24,11 @@ a = Analysis(
     hiddenimports=[
         # FastAPI and dependencies
         'fastapi',
+        'fastapi.middleware',
+        'fastapi.middleware.cors',
+        'fastapi.staticfiles',
+        'fastapi.templating',
+        'fastapi.responses',
         'uvicorn',
         'uvicorn.logging',
         'uvicorn.loops',
@@ -38,8 +43,11 @@ a = Analysis(
         'starlette',
         'starlette.routing',
         'starlette.responses',
+        'starlette.middleware',
+        'starlette.middleware.cors',
         'pydantic',
         'pydantic_core',
+        'pydantic_settings',
         
         # Scientific computing
         'numpy',
