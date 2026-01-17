@@ -4,7 +4,7 @@ A comprehensive tool for analyzing MRI images to detect and visualize visceral f
 
 ## Demo
 
-<video src="https://github.com/Aelof3/visceral-fat/raw/main/vfat.mp4" autoplay loop muted playsinline width="100%"></video>
+![Demo](vfat.gif)
 
 *Demo showing tissue segmentation, analysis statistics, and interactive 3D model visualization.*
 
