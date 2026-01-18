@@ -297,27 +297,26 @@ class ModelService:
                 return None
             
             # Step 1: Clean up the mask with morphological operations
-            # Use lighter cleanup for fat tissues to preserve detail
-            opening_iters = 1 if total_voxels > 2000 else 0
-            closing_iters = 1  # Reduced from 2 to preserve more detail
+            # Skip opening for fat tissues (keep_small_objects=True) to preserve small deposits
+            if not keep_small_objects:
+                opening_iters = 1 if total_voxels > 2000 else 0
+                if opening_iters > 0:
+                    mask = ndimage.binary_opening(mask, iterations=opening_iters)
             
-            if opening_iters > 0:
-                mask = ndimage.binary_opening(mask, iterations=opening_iters)
-            
-            # Fill small holes
-            if closing_iters > 0:
-                mask = ndimage.binary_closing(mask, iterations=closing_iters)
+            # Fill small holes - use closing only for large tissues, not for scattered fat
+            if not keep_small_objects:
+                mask = ndimage.binary_closing(mask, iterations=1)
             mask = ndimage.binary_fill_holes(mask)
             
             # Remove small disconnected objects (keep only larger regions)
-            # Less aggressive for fat tissues (keep_small_objects=True)
+            # Skip entirely for fat tissues (keep_small_objects=True)
             if not keep_small_objects:
                 labeled, num_features = ndimage.label(mask)
                 if num_features > 1:
                     sizes = ndimage.sum(mask, labeled, range(1, num_features + 1))
                     # Keep only objects larger than 0.5% of the largest (or 10 voxels minimum)
                     max_size = np.max(sizes) if len(sizes) > 0 else 0
-                    min_size = max(10, max_size * 0.005)  # Reduced thresholds
+                    min_size = max(10, max_size * 0.005)
                     for i, size in enumerate(sizes, 1):
                         if size < min_size:
                             mask[labeled == i] = False
@@ -328,8 +327,9 @@ class ModelService:
                 return None
             
             # Step 2: Apply Gaussian smoothing to create smoother surfaces
-            # Convert to float and smooth
-            smoothed = ndimage.gaussian_filter(mask.astype(np.float32), sigma=1.2)
+            # Use lighter smoothing for fat to preserve small features
+            smooth_sigma = 0.8 if keep_small_objects else 1.2
+            smoothed = ndimage.gaussian_filter(mask.astype(np.float32), sigma=smooth_sigma)
             
             # Step 3: Run marching cubes on the smoothed volume
             verts, faces, normals, _ = measure.marching_cubes(
