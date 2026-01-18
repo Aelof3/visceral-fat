@@ -77,12 +77,21 @@ a = Analysis(
         'trimesh.exchange',
         'trimesh.exchange.gltf',
         
+        # Async and IO
+        'aiofiles',
+        'aiofiles.os',
+        'aiofiles.ospath',
+        
         # Other
         'multipart',
         'python_multipart',
         'anyio',
         'anyio._backends',
         'anyio._backends._asyncio',
+        'email_validator',
+        'httptools',
+        'watchfiles',
+        'websockets',
     ],
     hookspath=[],
     hooksconfig={},
