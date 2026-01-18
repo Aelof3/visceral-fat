@@ -134,16 +134,21 @@ class ModelService:
             include_tissues = ["body", "visceral_fat", "organs"]
         
         # Pre-compute normalized volume and body mask (shared across tissues)
+        # Match 2D analysis: normalize then smooth before thresholding
         vol_min, vol_max = float(np.min(volume)), float(np.max(volume))
         if vol_max - vol_min > 0:
             normalized = ((volume - vol_min) / (vol_max - vol_min)).astype(np.float32)
         else:
             raise ValueError("Volume has no intensity variation")
         
-        # Compute body mask once
+        # Apply Gaussian smoothing like 2D analysis (sigma=1.0, scaled for downsampling)
+        smooth_sigma = max(0.5, 1.0 / downsample_factor)
+        normalized = ndimage.gaussian_filter(normalized, sigma=smooth_sigma)
+        
+        # Compute body mask using same threshold as 2D analysis (0.25, not 0.3)
         from skimage import filters
         threshold = filters.threshold_otsu(normalized)
-        body_mask = normalized > threshold * 0.3
+        body_mask = normalized > threshold * 0.25  # Match 2D analysis
         body_mask = ndimage.binary_fill_holes(body_mask)
         
         # Pre-compute eroded body for fat separation
@@ -193,12 +198,19 @@ class ModelService:
         
         # Generate meshes with improved segmentation
         # Use consistent thresholds matching the 2D analysis
+        p15 = np.percentile(body_pixels, 15)
         p75 = np.percentile(body_pixels, 75)
-        p35 = np.percentile(body_pixels, 35)
-        p55 = np.percentile(body_pixels, 55)
         
-        # FAT: Brightest regions (top 25%)
+        # FAT: Brightest regions (top 25%) - matches 2D analysis
         fat_mask = (normalized >= p75) & body_mask
+        
+        # Clean up fat mask slice-by-slice like 2D analysis does
+        # (opening/closing with disk(2) equivalent, scaled for downsampling)
+        print(f"Fat mask before cleanup: {np.sum(fat_mask)} voxels")
+        for z in range(fat_mask.shape[0]):
+            # Light cleanup - just fill small holes, don't remove small features
+            fat_mask[z] = ndimage.binary_closing(fat_mask[z], iterations=1)
+        print(f"Fat mask after cleanup: {np.sum(fat_mask)} voxels")
         
         mesh_errors = []
         
@@ -247,8 +259,7 @@ class ModelService:
         
         if "organs" in include_tissues:
             # Organs (includes muscle): everything in the body that isn't fat
-            # Medium intensity regions (15th-75th percentile)
-            p15 = np.percentile(body_pixels, 15)
+            # Medium intensity regions (15th-75th percentile) - matches 2D analysis
             tissue_mask = (normalized >= p15) & (normalized < p75) & body_mask
             tissue_mask = tissue_mask & ~fat_mask  # Exclude fat
             print(f"Generating organs mesh... (mask voxels: {np.sum(tissue_mask)})")
