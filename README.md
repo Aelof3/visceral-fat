@@ -110,12 +110,59 @@ The frontend will be available at `http://localhost:5173`
 
 1. Start both the backend and frontend servers
 2. Open `http://localhost:5173` in your browser
-3. Enter the path to a directory containing DICOM files
-4. Click "Load" to import the MRI series
-5. Select a series from the sidebar
-6. Click "Analyze Series" to perform tissue segmentation
-7. Toggle between Original, Analyzed, and 3D views
-8. Generate a 3D model for interactive visualization
+3. Upload a ZIP file containing DICOM images (see format below)
+4. Select a series from the sidebar
+5. Click "Analyze" to perform tissue segmentation
+6. Toggle between Original, Analyzed, and 3D views
+7. Click "Generate 3D" for interactive 3D visualization
+
+## DICOM ZIP File Format
+
+The application accepts ZIP files containing DICOM MRI images. The file structure is flexible:
+
+### Supported Structures
+
+```
+# Simple flat structure
+my_scan.zip
+├── IM_0001
+├── IM_0002
+├── IM_0003
+└── ...
+
+# Nested folder structure (from DICOM export)
+my_scan.zip
+├── DICOM/
+│   └── ST000001/
+│       └── SE000001/
+│           ├── IM000001.dcm
+│           ├── IM000002.dcm
+│           └── ...
+
+# Multiple series in one ZIP
+my_scan.zip
+├── Series1/
+│   ├── slice_001.dcm
+│   └── slice_002.dcm
+└── Series2/
+    ├── slice_001.dcm
+    └── slice_002.dcm
+```
+
+### Key Points
+
+- **File extensions**: DICOM files can have `.dcm` extension or no extension at all - the app detects DICOM files by content
+- **Folder depth**: Any nesting level is supported - all subdirectories are scanned
+- **Multiple series**: If your ZIP contains multiple MRI series, they will be automatically separated based on the DICOM `SeriesInstanceUID` tag
+- **Non-DICOM files**: Any non-DICOM files (like .txt, .xml, .zip) are automatically skipped
+- **Ordering**: Slices are automatically ordered by the DICOM `InstanceNumber` tag
+
+### Best Practices
+
+1. **Use T1-weighted MRI scans** for optimal fat detection (fat appears bright on T1)
+2. **Include the full abdominal region** for visceral fat analysis
+3. **Ensure consistent slice spacing** for accurate 3D model generation
+4. **Avoid mixing different scan types** in the same series
 
 ## API Endpoints
 
