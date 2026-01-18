@@ -150,12 +150,32 @@ class ModelService:
         # Use 2D erosion slice-by-slice to match 2D analysis behavior
         eroded_body = None
         if "visceral_fat" in include_tissues or "subcutaneous_fat" in include_tissues:
+            # Scale erosion iterations based on downsampling
+            # 2D analysis uses 12 iterations on full resolution
+            # We need to scale down proportionally for downsampled volume
+            scaled_iterations = max(2, int(12 / downsample_factor))
+            print(f"Using {scaled_iterations} erosion iterations (scaled from 12 by factor {downsample_factor:.1f})")
+            
             # Apply 2D erosion on each slice separately (like the 2D analysis does)
             eroded_body = np.zeros_like(body_mask, dtype=bool)
             for z in range(body_mask.shape[0]):
-                slice_eroded = ndimage.binary_erosion(body_mask[z], iterations=8)
+                slice_eroded = ndimage.binary_erosion(body_mask[z], iterations=scaled_iterations)
                 slice_eroded = ndimage.binary_fill_holes(slice_eroded)
                 eroded_body[z] = slice_eroded
+            
+            # Safety check: if erosion removed too much, reduce iterations
+            eroded_volume_ratio = np.sum(eroded_body) / np.sum(body_mask) if np.sum(body_mask) > 0 else 0
+            print(f"Eroded body volume ratio: {eroded_volume_ratio:.2%}")
+            
+            if eroded_volume_ratio < 0.3:  # Less than 30% of body remaining
+                print("Erosion too aggressive, reducing iterations...")
+                scaled_iterations = max(1, scaled_iterations // 2)
+                eroded_body = np.zeros_like(body_mask, dtype=bool)
+                for z in range(body_mask.shape[0]):
+                    slice_eroded = ndimage.binary_erosion(body_mask[z], iterations=scaled_iterations)
+                    slice_eroded = ndimage.binary_fill_holes(slice_eroded)
+                    eroded_body[z] = slice_eroded
+                print(f"Reduced to {scaled_iterations} iterations, new ratio: {np.sum(eroded_body) / np.sum(body_mask):.2%}")
         
         # Compute percentiles once
         body_pixels = normalized[body_mask]
