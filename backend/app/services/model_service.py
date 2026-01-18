@@ -147,10 +147,15 @@ class ModelService:
         body_mask = ndimage.binary_fill_holes(body_mask)
         
         # Pre-compute eroded body for fat separation
+        # Use 2D erosion slice-by-slice to match 2D analysis behavior
         eroded_body = None
         if "visceral_fat" in include_tissues or "subcutaneous_fat" in include_tissues:
-            eroded_body = ndimage.binary_erosion(body_mask, iterations=5)
-            eroded_body = ndimage.binary_fill_holes(eroded_body)
+            # Apply 2D erosion on each slice separately (like the 2D analysis does)
+            eroded_body = np.zeros_like(body_mask, dtype=bool)
+            for z in range(body_mask.shape[0]):
+                slice_eroded = ndimage.binary_erosion(body_mask[z], iterations=8)
+                slice_eroded = ndimage.binary_fill_holes(slice_eroded)
+                eroded_body[z] = slice_eroded
         
         # Compute percentiles once
         body_pixels = normalized[body_mask]
@@ -194,7 +199,8 @@ class ModelService:
             if eroded_body is not None:
                 tissue_mask = tissue_mask & eroded_body
             print(f"Generating visceral_fat mesh... (mask voxels: {np.sum(tissue_mask)})")
-            mesh = self._generate_mesh_fast(tissue_mask, voxel_spacing, target_faces=8000)
+            # keep_small_objects=True to preserve distributed fat deposits
+            mesh = self._generate_mesh_fast(tissue_mask, voxel_spacing, target_faces=8000, keep_small_objects=True)
             if mesh:
                 mesh.visual.face_colors = [255, 165, 0, 255]  # Full alpha
                 scene.add_geometry(mesh, node_name="visceral_fat", geom_name="visceral_fat")
@@ -209,7 +215,8 @@ class ModelService:
             if eroded_body is not None:
                 tissue_mask = tissue_mask & ~eroded_body
             print(f"Generating subcutaneous_fat mesh... (mask voxels: {np.sum(tissue_mask)})")
-            mesh = self._generate_mesh_fast(tissue_mask, voxel_spacing, target_faces=8000)
+            # keep_small_objects=True to preserve distributed fat deposits
+            mesh = self._generate_mesh_fast(tissue_mask, voxel_spacing, target_faces=8000, keep_small_objects=True)
             if mesh:
                 mesh.visual.face_colors = [255, 255, 0, 255]  # Full alpha
                 scene.add_geometry(mesh, node_name="subcutaneous_fat", geom_name="subcutaneous_fat")
@@ -259,7 +266,8 @@ class ModelService:
         self, 
         mask: np.ndarray, 
         voxel_spacing: tuple,
-        target_faces: int = 10000
+        target_faces: int = 10000,
+        keep_small_objects: bool = False
     ) -> Optional[trimesh.Trimesh]:
         """Mesh generation optimized for clean, smooth appearance"""
         try:
@@ -269,9 +277,9 @@ class ModelService:
                 return None
             
             # Step 1: Clean up the mask with morphological operations
-            # Reduce iterations for smaller volumes
-            opening_iters = 1 if total_voxels > 1000 else 0
-            closing_iters = 2 if total_voxels > 500 else 1
+            # Use lighter cleanup for fat tissues to preserve detail
+            opening_iters = 1 if total_voxels > 2000 else 0
+            closing_iters = 1  # Reduced from 2 to preserve more detail
             
             if opening_iters > 0:
                 mask = ndimage.binary_opening(mask, iterations=opening_iters)
@@ -281,16 +289,18 @@ class ModelService:
                 mask = ndimage.binary_closing(mask, iterations=closing_iters)
             mask = ndimage.binary_fill_holes(mask)
             
-            # Remove small disconnected objects (keep only large regions)
-            labeled, num_features = ndimage.label(mask)
-            if num_features > 1:
-                sizes = ndimage.sum(mask, labeled, range(1, num_features + 1))
-                # Keep only objects larger than 1% of the largest (or 20 voxels minimum)
-                max_size = np.max(sizes) if len(sizes) > 0 else 0
-                min_size = max(20, max_size * 0.01)  # At least 20 voxels or 1% of largest
-                for i, size in enumerate(sizes, 1):
-                    if size < min_size:
-                        mask[labeled == i] = False
+            # Remove small disconnected objects (keep only larger regions)
+            # Less aggressive for fat tissues (keep_small_objects=True)
+            if not keep_small_objects:
+                labeled, num_features = ndimage.label(mask)
+                if num_features > 1:
+                    sizes = ndimage.sum(mask, labeled, range(1, num_features + 1))
+                    # Keep only objects larger than 0.5% of the largest (or 10 voxels minimum)
+                    max_size = np.max(sizes) if len(sizes) > 0 else 0
+                    min_size = max(10, max_size * 0.005)  # Reduced thresholds
+                    for i, size in enumerate(sizes, 1):
+                        if size < min_size:
+                            mask[labeled == i] = False
             
             remaining_voxels = np.sum(mask)
             if remaining_voxels < 10:
